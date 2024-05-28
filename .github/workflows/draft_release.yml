@@ -1,0 +1,46 @@
+name: Draft Release
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  draft_release:
+    if: |
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.base.ref == 'main' &&
+      contains(github.event.pull_request.title, 'chore(release)')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Read package.json
+        id: read-package-json
+        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+
+      - name: Create Draft Release
+        run: |
+          version="${{ steps.read-package-json.outputs.version }}" # Assuming you have the version available as an output from a previous step
+
+          response=$(curl -X POST \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/repos/${{ github.repository }}/releases \
+            -d '{
+              "tag_name": "v'"$version"'",
+              "name": "Release v'"$version"'",
+              "body": "Your release notes here",
+              "draft": true
+            }')
+
+          release_url=$(echo "$response" | jq -r '.html_url')
+
+          if [ -z "$release_url" ]; then
+            echo "Error creating draft release"
+            exit 1
+          else
+            echo "Draft release created: $release_url"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

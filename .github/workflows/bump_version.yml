@@ -1,0 +1,97 @@
+name: Bump Version
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_type:
+        type: choice
+        description: 'Version type'
+        required: true
+        options: 
+          - patch
+          - minor
+          - major
+
+jobs:
+  bump_version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for all tags
+
+      - name: Bump version
+        id: bump_version
+        run: node bump_version.cjs ${{ github.event.inputs.version_type }}
+
+      - name: Read package.json
+        id: read-package-json
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Get last release version
+        id: get_last_release_version
+        run: |
+          TAGS=$(git tag)
+          if [ -z "$TAGS" ]; then
+            echo "No tags found. Setting LAST_VERSION to 0.0.0."
+            LAST_VERSION="0.0.0"
+          else
+            LAST_VERSION=$(git describe --tags --abbrev=0)
+          fi
+          echo "LAST_VERSION=${LAST_VERSION}" >> $GITHUB_ENV
+
+      - name: Get last release commit hash
+        id: get_last_release_commit
+        run: |
+          if [ "${{ env.LAST_VERSION }}" = "0.0.0" ]; then
+            echo "No previous release. Setting LAST_RELEASE_COMMIT to the first commit."
+            LAST_RELEASE_COMMIT=$(git rev-list --max-parents=0 HEAD)
+          else
+            LAST_RELEASE_COMMIT=$(git rev-list -n 1 --grep='chore(release)' HEAD)
+          fi
+          echo "LAST_RELEASE_COMMIT=${LAST_RELEASE_COMMIT}" >> $GITHUB_ENV
+
+      - name: Get commits since last release
+        id: get_commits_since_last_release
+        run: |
+          COMMITS=$(git log --pretty=format:'%H %s' ${LAST_RELEASE_COMMIT}..HEAD)
+          echo "COMMITS<<EOF" >> $GITHUB_ENV
+          echo "${COMMITS}" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Run changelog update script
+        run: node update_changelog.cjs
+        env:
+          VERSION: ${{ env.VERSION }}
+          COMMITS: ${{ env.COMMITS }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          LAST_VERSION: ${{ env.LAST_VERSION }}
+
+      - name: Configure Git
+        run: |
+          git config --global user.email "actions@github.com"
+          git config --global user.name "GitHub Actions"
+
+      - name: Commit updated files
+        run: |
+          git add package.json package-lock.json CHANGELOG.md
+          git commit -m "chore(release): ${{ env.VERSION }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create Pull Request for version bump
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore(release): ${{ env.VERSION }}"
+          branch: "bump-version-${{ github.event.inputs.version_type }}-v${{ env.VERSION }}"
+          title: "chore(release): ${{ env.VERSION }}"
+          body: "This PR bumps the version to ${{ env.VERSION }} and updates the changelog."
+          labels: |
+            release

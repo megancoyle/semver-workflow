@@ -1,0 +1,19 @@
+{
+  "name": "semver-workflow",
+  "type": "module",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/megancoyle/semver-workflow.git"
+  },
+  "author": "Megan Coyle",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/megancoyle/semver-workflow/issues"
+  },
+  "homepage": "https://github.com/megancoyle/semver-workflow#readme"
+}
