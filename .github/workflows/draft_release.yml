@@ -19,10 +19,17 @@ jobs:
         id: read-package-json
         run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
 
+      - name: Get merged commit hash
+        id: get-merge-commit
+        run: |
+          echo "MERGED_COMMIT=${{ github.event.pull_request.merge_commit_sha }}" >> $GITHUB_ENV
+
       - name: Create Draft Release
         run: |
           version="${{ steps.read-package-json.outputs.version }}" # Assuming you have the version available as an output from a previous step
+          merged_commit="${{ env.MERGED_COMMIT }}"
 
+          # Create the release with the merged commit's hash as the reference
           response=$(curl -X POST \
             -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github.v3+json" \
@@ -30,8 +37,9 @@ jobs:
             -d '{
               "tag_name": "v'"$version"'",
               "name": "Release v'"$version"'",
-              "body": "Your release notes here",
-              "draft": true
+              "body": "Release targeting commit hash: '"$merged_commit"'",
+              "draft": true,
+              "target_commitish": "'"$merged_commit"'"
             }')
 
           release_url=$(echo "$response" | jq -r '.html_url')
